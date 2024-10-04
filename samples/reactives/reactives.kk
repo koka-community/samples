@@ -9,50 +9,48 @@ fun watch(r: ev<rref<a>>, p: provider<b>, immediate: bool = True): io b
 div type provider<a>
   Provider(
     listeners: ref<global, list<(a) -> io ()>>,
-    current: () -> io a,
-    r: ref<global, maybe<ev<rref<a>>>>
+    current: () -> io a
   )
 
 fun initProvider(r:ev<rref<a>>, reactor: ev<rref<a>> -> io a, current: ref<global, maybe<a>>): io ()
   val x = reactor(r)
   current := Just(x)
 
-fun mkProvider(reactor: ev<rref<a>> -> io a, show: (a) -> io string, name="Provider"): io provider<a>
-  val lcurrent : some<a> ref<global, maybe<a>> = ref(Nothing)
-  val r : some<a> ref<global, maybe<ev<rref<a>>>> =  ref(Nothing)
+fun mk-provider(reactor-fn: ev<rref<a>> -> io a, show: (a) -> io string, name="Provider"): io provider<a>
+  val current-state : some<a> ref<global, maybe<a>> = ref(Nothing)
   val continuex: ref<global, () -> io ()> = ref(fn(){})
-  val doInit = fn(r1)
-      r1.yield()
-      val x = reactor(r1)
-      r1.emit(x)
-  val pr = Provider(ref([]), fn(){ 
-    match !lcurrent
+  val do-init = fn(rref)
+      rref.yield()
+      val result = reactor-fn(rref)
+      rref.emit(result)
+      ()
+  val provider = Provider(ref([]), fn(){ 
+    match !current-state
       Nothing -> 
         (!continuex)()
-        match !lcurrent
+        match !current-state
           Nothing -> throw("Not initialize")
           Just(x) -> x
       Just(k) ->
         k
-    },
-    r)
-  named handle(fn(x) {r.set(Just(x));  doInit(x); () })
-    fun emit(a)
-      lcurrent := Just(a)
-      (!pr.listeners).foreach fn(l)
-        l(a)
+    })
+  named handle(do-init)
+    fun emit(new-value)
+      current-state := Just(new-value)
+      (!provider.listeners).foreach fn(listener)
+        listener(new-value)
     raw ctl yield()
       continuex := (fn() {rcontext.resume(())})
-    raw ctl watch_(o, triggerImmediately)
-      o.listeners.set(Cons(fn(b) {rcontext.resume(b)}, !(o.listeners)))
-      if triggerImmediately then
-        (o.current)()
+    raw ctl watch_(other-provider, trigger-immediately)
+      other-provider.listeners.set(Cons(fn(b) {rcontext.resume(b)}, !(other-provider.listeners)))
+      if trigger-immediately then
+        (other-provider.current)()
         ()
-  pr
+  provider
   
 fun main()
   val result = try
-    val oProvider = mkProvider(
+    val o-provider = mk-provider(
       fn(r: ev<rref<int>>) {
         r.emit(1)
         r.emit(2)
@@ -61,18 +59,18 @@ fun main()
       fn (x: int) x.show,
       "o"
     )
-    val sProvider = mkProvider(
+    val s-provider = mk-provider(
       fn(r: ev<rref<int>>){
         trace("Hi")
         r.emit(100)
-        val x = r.watch(oProvider, True)
+        val x = r.watch(o-provider, True)
         trace("X: " ++ x.show)
         1
       },
       fn(x:int) x.show,
       "s"
     );
-    (sProvider.current)()
+    (s-provider.current)()
   match result
     Ok(x) -> x.show
     Error(e) -> e.show
