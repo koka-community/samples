@@ -12,10 +12,6 @@ div type provider<a>
     current: () -> io a
   )
 
-fun initProvider(r:ev<rref<a>>, reactor: ev<rref<a>> -> io a, current: ref<global, maybe<a>>): io ()
-  val x = reactor(r)
-  current := Just(x)
-
 fun mk-provider(reactor-fn: ev<rref<a>> -> io a, show: (a) -> io string, name="Provider"): io provider<a>
   val current-state : some<a> ref<global, maybe<a>> = ref(Nothing)
   val continuex: ref<global, () -> io ()> = ref(fn(){})

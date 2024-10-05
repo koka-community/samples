@@ -40,7 +40,7 @@ fun heap(action: forall<s> () -> <providerHeap<s>,st<global>,pure|e> ()): <st<gl
         ctl yield()
           ("yielding from " ++ pname).trace
           continuex := (fn() {resume(())})
-        ctl watch_(o:some<s,b,e> provider<s,b,e>, triggerImmediately)
+        ctl watch_(o, triggerImmediately)
           (pname ++ " watching " ++ o.name).trace
           o.listeners.set(Cons(fn(b) {resume(b)}, !(o.listeners)))
           if triggerImmediately then
